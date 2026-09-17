@@ -1,0 +1,16 @@
+// Minimal duration parser for strings like "15m", "7d", "1h", "30s", or a plain number of ms.
+const UNITS = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+
+function ms(value) {
+  if (typeof value === 'number') return value;
+  const match = /^(\d+)\s*(s|m|h|d)$/i.exec(String(value).trim());
+  if (!match) {
+    const asNumber = Number(value);
+    if (!Number.isNaN(asNumber)) return asNumber;
+    throw new Error(`Invalid duration string: ${value}`);
+  }
+  const [, amount, unit] = match;
+  return Number(amount) * UNITS[unit.toLowerCase()];
+}
+
+module.exports = ms;

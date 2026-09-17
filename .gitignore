@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-electron/
+release/
+.env
+.env.local
+*.log
+uploads/*
+!uploads/.gitkeep
+backups/*
+!backups/.gitkeep
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json

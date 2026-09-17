@@ -1,0 +1,56 @@
+{
+  "name": "inventory-system-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "نظام إدارة المخزون - تطبيق سطح المكتب",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build:frontend": "cd ../frontend && npm run build",
+    "build": "npm run build:frontend && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.inventorysystem.app",
+    "productName": "نظام إدارة المخزون",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!.env",
+          "!*.log"
+        ]
+      },
+      {
+        "from": "../frontend/dist",
+        "to": "frontend/dist"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png"
+    }
+  },
+  "allowScripts": {
+    "electron@31.7.7": true
+  }
+}
