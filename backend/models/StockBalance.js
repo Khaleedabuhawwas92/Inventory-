@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 // Fast-read current-quantity cache. The authoritative history lives in
 // StockMovement; this collection exists purely so "current stock" reads don't
@@ -20,6 +21,8 @@ stockBalanceSchema.virtual('availableQuantity').get(function availableQuantity()
 stockBalanceSchema.set('toJSON', { virtuals: true });
 stockBalanceSchema.set('toObject', { virtuals: true });
 
+stockBalanceSchema.plugin(tenantPlugin);
+stockBalanceSchema.index({ organizationId: 1 });
 stockBalanceSchema.index({ product: 1, warehouse: 1 }, { unique: true });
 
 module.exports = mongoose.model('StockBalance', stockBalanceSchema);

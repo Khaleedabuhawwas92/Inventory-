@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 // TO_SUPPLIER: defective/excess goods sent back to a supplier (stock leaves the warehouse).
 // FROM_CUSTOMER: customer or internal return of previously issued goods (stock re-enters the warehouse).
@@ -14,7 +15,7 @@ const itemSchema = new mongoose.Schema(
 
 const stockReturnSchema = new mongoose.Schema(
   {
-    docNo: { type: String, required: true, unique: true },
+    docNo: { type: String, required: true },
     date: { type: Date, default: Date.now },
     type: { type: String, enum: RETURN_TYPES, required: true },
     warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
@@ -33,6 +34,9 @@ const stockReturnSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+stockReturnSchema.plugin(tenantPlugin);
+stockReturnSchema.index({ organizationId: 1, docNo: 1 }, { unique: true });
 
 module.exports = mongoose.model('StockReturn', stockReturnSchema);
 module.exports.RETURN_TYPES = RETURN_TYPES;

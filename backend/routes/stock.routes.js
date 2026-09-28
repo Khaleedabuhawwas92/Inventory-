@@ -13,6 +13,7 @@ const { stockReturnRules } = require('../validators/stockReturn.validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const permit = require('../middleware/permit');
+const requireFeature = require('../middleware/requireFeature');
 
 const router = express.Router();
 router.use(authenticate);
@@ -48,7 +49,7 @@ router.get('/returns/:id', permit('stock.view'), stockReturnController.getById);
 // Required permission depends on direction (TO_SUPPLIER behaves like an OUT,
 // FROM_CUSTOMER like an IN), so it's checked inside the controller instead
 // of a single fixed permission here.
-router.post('/returns', stockReturnRules, validate, stockReturnController.create);
+router.post('/returns', requireFeature('returns'), stockReturnRules, validate, stockReturnController.create);
 router.post('/returns/:id/approve', stockReturnController.approve);
 
 module.exports = router;

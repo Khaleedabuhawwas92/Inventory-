@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const AUDIT_ACTIONS = [
   'LOGIN', 'LOGOUT', 'LOGIN_FAILED',
@@ -24,6 +25,8 @@ const auditLogSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+auditLogSchema.plugin(tenantPlugin);
+auditLogSchema.index({ organizationId: 1 });
 auditLogSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

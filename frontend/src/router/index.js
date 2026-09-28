@@ -1,13 +1,17 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router';
 import MainLayout from '@/layouts/MainLayout.vue';
 import { useAuthStore } from '@/stores/auth';
-import authService from '@/services/authService';
 
 const ComingSoon = () => import('@/pages/ComingSoon.vue');
 
 // `layout: 'main'` routes render inside the authenticated shell (sidebar/navbar).
 // `layout: 'auth'` / `layout: 'blank'` routes render standalone.
-// `public: true` skips the auth guard (wired in the Authentication phase).
+// `public: true` skips the auth guard.
+//
+// There is no more system-wide "first run" gate: registration creates a new,
+// independent organization at any time (replaces the old Setup Wizard —
+// see backend/controllers/onboarding.controller.js), so /login, /register
+// and /join are simply always-public routes.
 const routes = [
   {
     path: '/login',
@@ -16,10 +20,16 @@ const routes = [
     meta: { layout: 'blank', public: true, title: 'تسجيل الدخول' },
   },
   {
-    path: '/setup',
-    name: 'setup',
-    component: () => import('@/pages/setup/SetupWizard.vue'),
-    meta: { layout: 'blank', public: true, title: 'إعداد النظام' },
+    path: '/register',
+    name: 'register',
+    component: () => import('@/pages/auth/Register.vue'),
+    meta: { layout: 'blank', public: true, title: 'تسجيل مؤسسة جديدة' },
+  },
+  {
+    path: '/join/:code?',
+    name: 'join',
+    component: () => import('@/pages/auth/JoinInvitation.vue'),
+    meta: { layout: 'blank', public: true, title: 'الانضمام عبر دعوة' },
   },
   {
     path: '/forgot-password',
@@ -111,6 +121,7 @@ const routes = [
 
       { path: 'users', name: 'users', component: () => import('@/pages/users/UsersList.vue'), meta: { title: 'المستخدمون', permission: 'users.view' } },
       { path: 'roles', name: 'roles', component: () => import('@/pages/roles/RolesList.vue'), meta: { title: 'الأدوار والصلاحيات', permission: 'roles.manage' } },
+      { path: 'invitations', name: 'invitations', component: () => import('@/pages/InvitationsList.vue'), meta: { title: 'دعوات الانضمام', permission: 'invitations.manage' } },
       { path: 'audit', name: 'audit', component: () => import('@/pages/AuditLogList.vue'), meta: { title: 'سجل العمليات', permission: 'audit.view' } },
       { path: 'settings', name: 'settings', component: () => import('@/pages/SettingsPage.vue'), meta: { title: 'الإعدادات', permission: 'settings.manage' } },
       { path: 'barcode-labels', name: 'barcode-labels', component: () => import('@/pages/products/BarcodeLabelsPage.vue'), meta: { title: 'طباعة ملصقات الباركود', permission: 'products.view' } },
@@ -123,6 +134,11 @@ const routes = [
       },
     ],
   },
+  // The Platform Admin control panel now lives entirely in its own project
+  // (platform-admin/) — a separate Vite app/origin talking to this same
+  // backend's /api/platform/* routes. Nothing platform-related is bundled
+  // into this tenant app any more (see src/constants/platformAdminUrl.js for
+  // the one small external link out to it).
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
@@ -131,31 +147,22 @@ const routes = [
   },
 ];
 
+// Electron loads the built app via `file://` (see vite.config.js), where
+// history-mode's real URLs (e.g. file:///…/dist/dashboard) don't correspond
+// to any actual file — a refresh or direct navigation 404s. Hash mode's
+// routes (file:///…/dist/index.html#/dashboard) always resolve to the same
+// real file regardless of the in-app route, so it's used only when running
+// inside the desktop shell (see desktop/electron/preload.js); the web
+// deployment is unaffected and keeps clean history-mode URLs.
+const isElectron = typeof window !== 'undefined' && !!window.desktopApp?.isElectron;
+
 const router = createRouter({
-  history: createWebHistory(),
+  history: isElectron ? createWebHashHistory() : createWebHistory(),
   routes,
   scrollBehavior() {
     return { top: 0 };
   },
 });
-
-let setupStatusCache = null;
-async function isSetupCompleted() {
-  if (setupStatusCache !== null) return setupStatusCache;
-  try {
-    const { data } = await authService.setupStatus();
-    setupStatusCache = !!data.data.setupCompleted;
-  } catch (err) {
-    // If the backend is unreachable we let the App shell's own connectivity
-    // check handle showing an error state instead of looping the router.
-    setupStatusCache = true;
-  }
-  return setupStatusCache;
-}
-
-export function invalidateSetupStatusCache() {
-  setupStatusCache = null;
-}
 
 router.beforeEach(async (to) => {
   document.title = to.meta.title ? `${to.meta.title} | نظام إدارة المخزون` : 'نظام إدارة المخزون';
@@ -165,12 +172,7 @@ router.beforeEach(async (to) => {
     await auth.initSession();
   }
 
-  if (to.name !== 'setup') {
-    const setupDone = await isSetupCompleted();
-    if (!setupDone) return { name: 'setup' };
-  }
-
-  if (to.name === 'login' && auth.isAuthenticated) {
+  if ((to.name === 'login' || to.name === 'register') && auth.isAuthenticated) {
     return { name: 'dashboard' };
   }
 

@@ -24,10 +24,13 @@ export default {
     formData.append('image', file);
     return api.post('/auth/me/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  setupStatus() {
-    return api.get('/setup/status');
+  registerCompany(payload) {
+    return api.post('/auth/register', payload);
   },
-  runSetup(payload) {
-    return api.post('/setup', payload);
+  invitationInfo(code) {
+    return api.get(`/auth/invitations/${code}`);
+  },
+  joinByInvitation(payload) {
+    return api.post('/auth/join', payload);
   },
 };

@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "seed": "node utils/seed.js"
+    "seed": "node utils/seed.js",
+    "migrate": "node migrations/001_multi_tenant_backfill.js",
+    "test": "node --test test/"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

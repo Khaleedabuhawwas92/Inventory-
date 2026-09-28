@@ -5,13 +5,18 @@
   "description": "نظام إدارة المخزون - تطبيق سطح المكتب",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "electron .",
+    "dev": "concurrently -k -n VITE,ELECTRON -c blue.bold,green.bold \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "cd ../frontend && npm run dev",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build:frontend": "cd ../frontend && npm run build",
-    "build": "npm run build:frontend && electron-builder"
+    "build:frontend:electron": "cd ../frontend && npm run build -- --mode electron --outDir dist-electron",
+    "build": "npm run build:frontend && npm run build:frontend:electron && electron-builder"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "wait-on": "^7.2.0"
   },
   "build": {
     "appId": "com.inventorysystem.app",
@@ -24,30 +29,18 @@
     ],
     "extraResources": [
       {
-        "from": "../backend",
-        "to": "backend",
-        "filter": [
-          "**/*",
-          "!.env",
-          "!*.log"
-        ]
-      },
-      {
-        "from": "../frontend/dist",
-        "to": "frontend/dist"
+        "from": "../frontend/dist-electron",
+        "to": "frontend"
       }
     ],
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.png"
+      "target": "nsis"
     },
     "mac": {
-      "target": "dmg",
-      "icon": "build/icon.png"
+      "target": "dmg"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "build/icon.png"
+      "target": "AppImage"
     }
   },
   "allowScripts": {

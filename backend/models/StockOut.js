@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const OUTPUT_TYPES = ['INTERNAL_USE', 'SALE', 'DAMAGE', 'MAINTENANCE', 'SAMPLE', 'OTHER'];
 
@@ -12,7 +13,7 @@ const itemSchema = new mongoose.Schema(
 
 const stockOutSchema = new mongoose.Schema(
   {
-    docNo: { type: String, required: true, unique: true },
+    docNo: { type: String, required: true },
     date: { type: Date, default: Date.now },
     warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     outputType: { type: String, enum: OUTPUT_TYPES, required: true },
@@ -30,6 +31,9 @@ const stockOutSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+stockOutSchema.plugin(tenantPlugin);
+stockOutSchema.index({ organizationId: 1, docNo: 1 }, { unique: true });
 
 module.exports = mongoose.model('StockOut', stockOutSchema);
 module.exports.OUTPUT_TYPES = OUTPUT_TYPES;

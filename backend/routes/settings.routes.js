@@ -1,13 +1,13 @@
 const express = require('express');
 const settingsController = require('../controllers/settings.controller');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, optionalAuthenticate } = require('../middleware/auth');
 const permit = require('../middleware/permit');
 const { makeUploader } = require('../middleware/upload');
 
 const router = express.Router();
 const uploadCompanyLogo = makeUploader('logo');
 
-router.get('/public', settingsController.publicInfo);
+router.get('/public', optionalAuthenticate, settingsController.publicInfo);
 router.get('/', authenticate, permit('settings.manage'), settingsController.getSettings);
 router.put('/', authenticate, permit('settings.manage'), settingsController.updateSettings);
 router.post(

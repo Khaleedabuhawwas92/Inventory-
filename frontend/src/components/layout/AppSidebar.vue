@@ -9,14 +9,21 @@ import SidebarGroup from './SidebarGroup.vue';
 const ui = useUiStore();
 const auth = useAuthStore();
 
+function isVisible(item) {
+  return auth.can(item.permission) && (!item.feature || auth.hasFeature(item.feature));
+}
+
 const visibleNavigation = computed(() =>
   navigation
     .map((item) => {
-      if (item.children) {
-        const children = item.children.filter((c) => auth.can(c.permission));
-        return children.length ? { ...item, children } : null;
+      if (!item.feature || auth.hasFeature(item.feature)) {
+        if (item.children) {
+          const children = item.children.filter(isVisible);
+          return children.length ? { ...item, children } : null;
+        }
+        return isVisible(item) ? item : null;
       }
-      return auth.can(item.permission) ? item : null;
+      return null;
     })
     .filter(Boolean)
 );

@@ -12,7 +12,20 @@ const env = {
   ACCESS_TOKEN_EXPIRES: process.env.ACCESS_TOKEN_EXPIRES || '15m',
   REFRESH_TOKEN_EXPIRES: process.env.REFRESH_TOKEN_EXPIRES || '7d',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+  // The standalone Platform Admin app (platform-admin/) — a separate Vite
+  // project/origin, not bundled with the tenant frontend. Talks to the same
+  // backend and is gated purely by requirePlatformAdmin, never by CORS —
+  // this just lets the browser's own CORS check allow the request through
+  // in the first place. Comma-separated for extra origins (e.g. a deployed
+  // platform-admin URL) without code changes.
+  PLATFORM_ADMIN_URL: process.env.PLATFORM_ADMIN_URL || 'http://localhost:5174',
 };
+
+env.CORS_ORIGINS = [
+  env.FRONTEND_URL,
+  env.PLATFORM_ADMIN_URL,
+  ...(process.env.EXTRA_CORS_ORIGINS ? process.env.EXTRA_CORS_ORIGINS.split(',').map((o) => o.trim()) : []),
+];
 
 if (env.NODE_ENV === 'production') {
   const missing = required.filter((key) => !process.env[key]);

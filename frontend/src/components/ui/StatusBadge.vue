@@ -17,6 +17,10 @@ const MAP = {
   active: { cls: 'badge-approved', label: 'نشط' },
   disabled: { cls: 'badge-cancelled', label: 'معطل' },
   inactive: { cls: 'badge-cancelled', label: 'غير نشط' },
+  suspended: { cls: 'badge-cancelled', label: 'معلّقة' },
+  used: { cls: 'badge-approved', label: 'مستخدمة' },
+  revoked: { cls: 'badge-cancelled', label: 'ملغاة' },
+  expired: { cls: 'badge-draft', label: 'منتهية' },
 };
 
 const info = computed(() => MAP[props.status] || { cls: 'badge-draft', label: props.status });

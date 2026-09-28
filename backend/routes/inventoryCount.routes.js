@@ -4,13 +4,14 @@ const { inventoryCountRules, recordCountsRules } = require('../validators/invent
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const permit = require('../middleware/permit');
+const requireFeature = require('../middleware/requireFeature');
 
 const router = express.Router();
 router.use(authenticate);
 
 router.get('/', permit('inventory.view'), controller.list);
 router.get('/:id', permit('inventory.view'), controller.getById);
-router.post('/', permit('inventory.create'), inventoryCountRules, validate, controller.create);
+router.post('/', permit('inventory.create'), requireFeature('inventoryCount'), inventoryCountRules, validate, controller.create);
 router.put('/:id/counts', permit('inventory.create'), recordCountsRules, validate, controller.recordCounts);
 router.post('/:id/submit', permit('inventory.create'), controller.submitForReview);
 router.post('/:id/approve', permit('inventory.approve'), controller.approve);

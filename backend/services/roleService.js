@@ -9,12 +9,20 @@ const ROLE_LABELS = {
   viewer: 'مشاهد',
 };
 
-async function ensureDefaultRoles() {
+// Seeds the default roles for one organization. `roleNames` lets callers pick
+// a subset (self-service registration deliberately never creates a
+// 'super-admin' role for a new organization — see onboarding.controller —
+// so there is nothing named 'super-admin' for an org's own admin to collide
+// with or escalate into).
+async function ensureDefaultRoles(organizationId, roleNames = Object.keys(DEFAULT_ROLE_PERMISSIONS)) {
   const roles = {};
-  for (const [name, permissions] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
-    let role = await Role.findOne({ name });
+  for (const name of roleNames) {
+    const permissions = DEFAULT_ROLE_PERMISSIONS[name];
+    if (!permissions) continue;
+    let role = await Role.findOne({ name, organizationId });
     if (!role) {
       role = await Role.create({
+        organizationId,
         name,
         nameAr: ROLE_LABELS[name] || name,
         permissions,

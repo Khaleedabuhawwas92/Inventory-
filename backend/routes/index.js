@@ -15,10 +15,10 @@ router.get('/health', (req, res) => {
   });
 });
 
-router.use('/setup', require('./setup.routes'));
 router.use('/auth', require('./auth.routes'));
 router.use('/users', require('./user.routes'));
 router.use('/roles', require('./role.routes'));
+router.use('/invitations', require('./invitation.routes'));
 router.use('/settings', require('./settings.routes'));
 router.use('/warehouses', require('./warehouse.routes'));
 router.use('/categories', require('./category.routes'));
@@ -34,6 +34,7 @@ router.use('/search', require('./search.routes'));
 router.use('/notifications', require('./notification.routes'));
 router.use('/audit-logs', require('./auditLog.routes'));
 router.use('/backups', require('./backup.routes'));
+router.use('/platform', require('./platform.routes'));
 
 // Feature routes are mounted here as later phases are implemented.
 

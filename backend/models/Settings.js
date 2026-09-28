@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
-// Singleton document holding company/system configuration.
+// One singleton document per organization, holding that organization's
+// company/system configuration.
 const settingsSchema = new mongoose.Schema(
   {
     company: {
@@ -10,6 +12,7 @@ const settingsSchema = new mongoose.Schema(
       phone: { type: String, default: '' },
       email: { type: String, default: '' },
       taxNumber: { type: String, default: '' },
+      country: { type: String, default: '' },
     },
     system: {
       currency: { type: String, default: 'JOD' },
@@ -48,5 +51,8 @@ const settingsSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+settingsSchema.plugin(tenantPlugin);
+settingsSchema.index({ organizationId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Settings', settingsSchema);

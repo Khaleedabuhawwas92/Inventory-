@@ -6,8 +6,10 @@ const User = require('../models/User');
 const auditService = require('../services/auditService');
 const { PERMISSIONS } = require('../constants/permissions');
 
+// Role is scoped manually, not via tenantPlugin (see models/Role.js), so
+// every query here filters by organizationId explicitly.
 const list = asyncHandler(async (req, res) => {
-  const roles = await Role.find().sort({ createdAt: 1 });
+  const roles = await Role.find({ organizationId: req.user.organizationId }).sort({ createdAt: 1 });
   sendSuccess(res, { data: roles });
 });
 
@@ -16,7 +18,7 @@ const permissionsCatalog = asyncHandler(async (req, res) => {
 });
 
 const getById = asyncHandler(async (req, res) => {
-  const role = await Role.findById(req.params.id);
+  const role = await Role.findOne({ _id: req.params.id, organizationId: req.user.organizationId });
   if (!role) throw ApiError.notFound('الدور غير موجود');
   sendSuccess(res, { data: role });
 });
@@ -24,10 +26,10 @@ const getById = asyncHandler(async (req, res) => {
 const create = asyncHandler(async (req, res) => {
   const { name, nameAr, description, permissions } = req.body;
 
-  const exists = await Role.findOne({ name });
+  const exists = await Role.findOne({ name, organizationId: req.user.organizationId });
   if (exists) throw ApiError.conflict('اسم الدور مستخدم مسبقاً');
 
-  const role = await Role.create({ name, nameAr, description, permissions });
+  const role = await Role.create({ organizationId: req.user.organizationId, name, nameAr, description, permissions });
 
   await auditService.logAction({
     req,
@@ -41,7 +43,7 @@ const create = asyncHandler(async (req, res) => {
 });
 
 const update = asyncHandler(async (req, res) => {
-  const role = await Role.findById(req.params.id);
+  const role = await Role.findOne({ _id: req.params.id, organizationId: req.user.organizationId });
   if (!role) throw ApiError.notFound('الدور غير موجود');
   if (role.isSystem && req.body.name && req.body.name !== role.name) {
     throw ApiError.badRequest('لا يمكن تغيير اسم دور نظامي');
@@ -71,11 +73,11 @@ const update = asyncHandler(async (req, res) => {
 });
 
 const remove = asyncHandler(async (req, res) => {
-  const role = await Role.findById(req.params.id);
+  const role = await Role.findOne({ _id: req.params.id, organizationId: req.user.organizationId });
   if (!role) throw ApiError.notFound('الدور غير موجود');
   if (role.isSystem) throw ApiError.badRequest('لا يمكن حذف دور نظامي');
 
-  const usersWithRole = await User.countDocuments({ role: role._id });
+  const usersWithRole = await User.countDocuments({ role: role._id, organizationId: req.user.organizationId });
   if (usersWithRole > 0) throw ApiError.conflict('لا يمكن حذف دور مرتبط بمستخدمين حالياً');
 
   await role.deleteOne();

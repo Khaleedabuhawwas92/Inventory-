@@ -73,6 +73,13 @@ async function revokeAllForUser(userId) {
   await RefreshToken.updateMany({ user: userId, revoked: false }, { revoked: true, revokedAt: new Date() });
 }
 
+// Batch version of revokeAllForUser — one indexed updateMany across every
+// given user, instead of N separate calls. Used for organization-wide
+// "log out everyone" (see controllers/platform/organizationDetail.controller.js).
+async function revokeAllForUsers(userIds) {
+  await RefreshToken.updateMany({ user: { $in: userIds }, revoked: false }, { revoked: true, revokedAt: new Date() });
+}
+
 module.exports = {
   signAccessToken,
   verifyAccessToken,
@@ -80,5 +87,6 @@ module.exports = {
   rotateRefreshToken,
   revokeRefreshToken,
   revokeAllForUser,
+  revokeAllForUsers,
   hashToken,
 };

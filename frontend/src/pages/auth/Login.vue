@@ -116,6 +116,13 @@ async function handleSubmit() {
         <button type="submit" class="btn-primary w-full" :disabled="loading">
           {{ loading ? 'جاري الدخول...' : 'تسجيل الدخول' }}
         </button>
+
+        <p class="text-center text-sm text-slate-400">
+          ليس لديك حساب؟
+          <router-link to="/register" class="text-primary-600 hover:underline">تسجيل مؤسسة جديدة</router-link>
+          ·
+          <router-link to="/join" class="text-primary-600 hover:underline">لديك دعوة انضمام؟</router-link>
+        </p>
       </form>
     </div>
   </AuthLayout>

@@ -2,7 +2,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { sendSuccess } = require('../utils/apiResponse');
 const Warehouse = require('../models/Warehouse');
+const Organization = require('../models/Organization');
 const auditService = require('../services/auditService');
+const { assertUnderLimit } = require('../services/limitsService');
 
 const list = asyncHandler(async (req, res) => {
   const { includeInactive } = req.query;
@@ -19,6 +21,18 @@ const getById = asyncHandler(async (req, res) => {
 
 const create = asyncHandler(async (req, res) => {
   const { name, code, address, manager, phone, notes } = req.body;
+
+  const existingCount = await Warehouse.countDocuments({ organizationId: req.user.organizationId });
+  if (existingCount >= 1) {
+    // The very first warehouse is always allowed regardless of this flag —
+    // "multiWarehouse" disabled means "stay single-warehouse", not "no
+    // warehouse at all".
+    const org = await Organization.findById(req.user.organizationId).select('features');
+    if (org?.features?.multiWarehouse === false) {
+      throw ApiError.forbidden('ميزة تعدد المخازن غير مفعّلة لمؤسستك حالياً، الرجاء التواصل مع الدعم لتفعيلها');
+    }
+  }
+  await assertUnderLimit(req.user.organizationId, 'warehouses');
 
   const exists = await Warehouse.findOne({ code: code.toUpperCase() });
   if (exists) throw ApiError.conflict('رمز المخزن مستخدم مسبقاً');

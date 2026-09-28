@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const itemSchema = new mongoose.Schema(
   {
@@ -20,7 +21,7 @@ itemSchema.virtual('total').get(function total() {
 // (or CANCELLED at any point before fully received).
 const purchaseOrderSchema = new mongoose.Schema(
   {
-    docNo: { type: String, required: true, unique: true },
+    docNo: { type: String, required: true },
     supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', required: true },
     warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     orderDate: { type: Date, default: Date.now },
@@ -46,5 +47,8 @@ purchaseOrderSchema.virtual('total').get(function total() {
   if (!this.items) return 0;
   return this.items.reduce((sum, item) => sum + item.quantity * item.unitCost - item.discount + item.tax, 0);
 });
+
+purchaseOrderSchema.plugin(tenantPlugin);
+purchaseOrderSchema.index({ organizationId: 1, docNo: 1 }, { unique: true });
 
 module.exports = mongoose.model('PurchaseOrder', purchaseOrderSchema);

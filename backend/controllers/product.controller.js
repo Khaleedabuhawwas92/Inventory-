@@ -8,6 +8,7 @@ const { nextSequence } = require('../services/counterService');
 const { publicUrlFor } = require('../middleware/upload');
 const auditService = require('../services/auditService');
 const inventoryService = require('../services/inventoryService');
+const { assertUnderLimit } = require('../services/limitsService');
 
 const list = asyncHandler(async (req, res) => {
   const { search, category, active, sortBy, sortDir } = req.query;
@@ -44,6 +45,8 @@ const getById = asyncHandler(async (req, res) => {
 
 const create = asyncHandler(async (req, res) => {
   const { barcode, nameAr, nameEn, category, unit, brand, description, purchasePrice, salePrice, minStock, maxStock } = req.body;
+
+  await assertUnderLimit(req.user.organizationId, 'products');
 
   if (barcode) {
     const exists = await Product.findOne({ barcode });

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const itemSchema = new mongoose.Schema(
   {
@@ -15,7 +16,7 @@ const itemSchema = new mongoose.Schema(
 // Status flow (spec §25): DRAFT -> COUNTING -> REVIEW -> APPROVED | CANCELLED
 const inventoryCountSchema = new mongoose.Schema(
   {
-    docNo: { type: String, required: true, unique: true },
+    docNo: { type: String, required: true },
     date: { type: Date, default: Date.now },
     warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     categoryFilter: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
@@ -28,5 +29,8 @@ const inventoryCountSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+inventoryCountSchema.plugin(tenantPlugin);
+inventoryCountSchema.index({ organizationId: 1, docNo: 1 }, { unique: true });
 
 module.exports = mongoose.model('InventoryCount', inventoryCountSchema);

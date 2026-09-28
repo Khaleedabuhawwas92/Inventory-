@@ -1,5 +1,9 @@
 // Sidebar navigation tree. `permission` is checked against the current user's
 // permission list once the Roles & Permissions phase is implemented (null = always visible).
+// `feature` (when present) is checked against the organization's feature
+// flags (useAuthStore().hasFeature) — a UX convenience for hiding modules the
+// organization doesn't have; the real gate is always server-side
+// (backend/middleware/requireFeature.js).
 export const navigation = [
   {
     title: 'الرئيسية',
@@ -15,7 +19,7 @@ export const navigation = [
       { title: 'التصنيفات', to: '/categories', permission: 'categories.view' },
       { title: 'الوحدات', to: '/units', permission: 'units.manage' },
       { title: 'المخازن', to: '/warehouses', permission: 'warehouses.view' },
-      { title: 'طباعة الباركود', to: '/barcode-labels', permission: 'products.view' },
+      { title: 'طباعة الباركود', to: '/barcode-labels', permission: 'products.view', feature: 'barcode' },
     ],
   },
   {
@@ -26,13 +30,14 @@ export const navigation = [
       { title: 'إخراج بضاعة', to: '/stock/out', permission: 'stock.out' },
       { title: 'نقل مخزون', to: '/stock/transfers', permission: 'stock.transfer' },
       { title: 'التسويات', to: '/stock/adjustments', permission: 'stock.adjust' },
-      { title: 'المرتجعات', to: '/stock/returns', permission: 'stock.view' },
+      { title: 'المرتجعات', to: '/stock/returns', permission: 'stock.view', feature: 'returns' },
       { title: 'سجل الحركات', to: '/stock/movements', permission: 'stock.view' },
     ],
   },
   {
     title: 'المشتريات',
     icon: 'shopping-cart',
+    feature: 'purchasing',
     children: [
       { title: 'طلبات الشراء', to: '/purchases', permission: 'purchases.view' },
       { title: 'استلام البضاعة', to: '/goods-receipts', permission: 'purchases.view' },
@@ -44,6 +49,7 @@ export const navigation = [
     icon: 'clipboard-list',
     to: '/inventory',
     permission: 'inventory.view',
+    feature: 'inventoryCount',
   },
   {
     title: 'التقارير',
@@ -62,6 +68,12 @@ export const navigation = [
     icon: 'shield-check',
     to: '/roles',
     permission: 'roles.manage',
+  },
+  {
+    title: 'دعوات الانضمام',
+    icon: 'user-plus',
+    to: '/invitations',
+    permission: 'invitations.manage',
   },
   {
     title: 'سجل العمليات',

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const itemSchema = new mongoose.Schema(
   {
@@ -13,7 +14,7 @@ const itemSchema = new mongoose.Schema(
 
 const goodsReceiptSchema = new mongoose.Schema(
   {
-    docNo: { type: String, required: true, unique: true },
+    docNo: { type: String, required: true },
     date: { type: Date, default: Date.now },
     supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', required: true },
     warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
@@ -28,5 +29,8 @@ const goodsReceiptSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+goodsReceiptSchema.plugin(tenantPlugin);
+goodsReceiptSchema.index({ organizationId: 1, docNo: 1 }, { unique: true });
 
 module.exports = mongoose.model('GoodsReceipt', goodsReceiptSchema);

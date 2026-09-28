@@ -21,15 +21,28 @@ const PERMISSIONS = [
 
   'roles.manage',
 
+  'invitations.manage',
+
   'audit.view',
 
   'settings.manage',
 ];
 
 // Default role -> permission mapping used during first-time setup / seeding.
+//
+// Bug fix: this used to be `PERMISSIONS.filter((p) => p !== 'settings.manage' || true)`.
+// `x || true` is always `true` regardless of `x`, so the filter predicate was
+// always true and never actually excluded 'settings.manage' — dead code that
+// silently granted every 'admin' the exact same permission set as
+// 'super-admin'. Since 'admin' is the role given to an organization's own
+// owner (see onboarding.controller.registerCompany) and is expected to have
+// full control of their own organization's data, the *current* runtime
+// behavior (full PERMISSIONS) is correct and is now made explicit instead of
+// being an accident of broken boolean logic — existing admins keep exactly
+// the access they already have.
 const DEFAULT_ROLE_PERMISSIONS = {
   'super-admin': PERMISSIONS, // full access, always
-  admin: PERMISSIONS.filter((p) => p !== 'settings.manage' || true), // admins get everything except nothing is excluded by default; tune per deployment
+  admin: PERMISSIONS, // organization owner: full control within their own organization
   'warehouse-manager': [
     'dashboard.view',
     'products.view', 'products.create', 'products.edit',

@@ -32,7 +32,7 @@ const MODULE_LABELS = {
   dashboard: 'لوحة التحكم', products: 'الأصناف', categories: 'التصنيفات', units: 'الوحدات',
   warehouses: 'المخازن', stock: 'الحركات', inventory: 'الجرد', suppliers: 'الموردون',
   purchases: 'المشتريات', reports: 'التقارير', users: 'المستخدمون', roles: 'الأدوار',
-  audit: 'سجل العمليات', settings: 'الإعدادات',
+  invitations: 'الدعوات', audit: 'سجل العمليات', settings: 'الإعدادات',
 };
 
 async function loadData() {

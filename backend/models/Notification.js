@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const NOTIFICATION_TYPES = [
   'LOW_STOCK', 'OUT_OF_STOCK',
@@ -26,6 +27,8 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+notificationSchema.plugin(tenantPlugin);
+notificationSchema.index({ organizationId: 1 });
 notificationSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Notification', notificationSchema);

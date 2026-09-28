@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const ADJUSTMENT_REASONS = ['DAMAGE', 'LOSS', 'WRONG_ENTRY', 'INVENTORY_COUNT', 'FOUND_STOCK', 'OTHER'];
 
@@ -15,7 +16,7 @@ const itemSchema = new mongoose.Schema(
 
 const stockAdjustmentSchema = new mongoose.Schema(
   {
-    docNo: { type: String, required: true, unique: true },
+    docNo: { type: String, required: true },
     date: { type: Date, default: Date.now },
     warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     notes: { type: String, default: '' },
@@ -27,6 +28,9 @@ const stockAdjustmentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+stockAdjustmentSchema.plugin(tenantPlugin);
+stockAdjustmentSchema.index({ organizationId: 1, docNo: 1 }, { unique: true });
 
 module.exports = mongoose.model('StockAdjustment', stockAdjustmentSchema);
 module.exports.ADJUSTMENT_REASONS = ADJUSTMENT_REASONS;

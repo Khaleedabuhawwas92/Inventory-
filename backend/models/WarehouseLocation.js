@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const warehouseLocationSchema = new mongoose.Schema(
   {
@@ -13,6 +14,8 @@ const warehouseLocationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+warehouseLocationSchema.plugin(tenantPlugin);
+warehouseLocationSchema.index({ organizationId: 1 });
 warehouseLocationSchema.index({ warehouse: 1, code: 1 }, { unique: true });
 
 module.exports = mongoose.model('WarehouseLocation', warehouseLocationSchema);

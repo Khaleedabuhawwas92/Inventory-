@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../utils/tenantPlugin');
 
 const MOVEMENT_TYPES = [
   'OPENING', 'IN', 'OUT',
@@ -14,7 +15,7 @@ const MOVEMENT_TYPES = [
 // REVERSAL movement instead (see spec §34 delete policy).
 const stockMovementSchema = new mongoose.Schema(
   {
-    movementNo: { type: String, required: true, unique: true },
+    movementNo: { type: String, required: true },
     type: { type: String, enum: MOVEMENT_TYPES, required: true, index: true },
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
     warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true, index: true },
@@ -34,8 +35,10 @@ const stockMovementSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+stockMovementSchema.plugin(tenantPlugin);
 stockMovementSchema.index({ product: 1, warehouse: 1, createdAt: -1 });
 stockMovementSchema.index({ createdAt: -1 });
+stockMovementSchema.index({ organizationId: 1, movementNo: 1 }, { unique: true });
 
 module.exports = mongoose.model('StockMovement', stockMovementSchema);
 module.exports.MOVEMENT_TYPES = MOVEMENT_TYPES;

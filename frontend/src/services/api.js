@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Inside Electron, the backend URL is resolved at *runtime* by the main
+// process (env var or a user-editable config file — see
+// desktop/electron/main.js) and handed to this page via contextBridge, not
+// baked into the bundle at build time — the same packaged .exe can then
+// point at a local or remote backend without rebuilding. The web build is
+// unaffected: window.desktopApp doesn't exist there, so it falls through to
+// the normal build-time VITE_API_URL as before.
+const baseURL =
+  (typeof window !== 'undefined' && window.desktopApp?.apiBaseUrl) ||
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL,

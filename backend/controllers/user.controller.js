@@ -4,15 +4,22 @@ const ApiError = require('../utils/ApiError');
 const { sendSuccess } = require('../utils/apiResponse');
 const { getPagination, buildMeta } = require('../utils/pagination');
 const User = require('../models/User');
+const Role = require('../models/Role');
+const Warehouse = require('../models/Warehouse');
 const AuditLog = require('../models/AuditLog');
 const tokenService = require('../services/tokenService');
 const auditService = require('../services/auditService');
+const { assertUnderLimit } = require('../services/limitsService');
 
+// User is not auto-scoped by tenantPlugin (see models/User.js — usernames/
+// emails must stay resolvable globally for login), so every query here
+// filters by organizationId explicitly, always from the authenticated
+// request's own user, never from anything the client sends.
 const list = asyncHandler(async (req, res) => {
   const { search, role, status, warehouse } = req.query;
   const { page, limit, skip } = getPagination(req.query);
 
-  const filter = {};
+  const filter = { organizationId: req.user.organizationId };
   if (search) {
     filter.$or = [
       { fullName: { $regex: search, $options: 'i' } },
@@ -38,7 +45,9 @@ const list = asyncHandler(async (req, res) => {
 });
 
 const getById = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).populate('role').populate('warehouse', 'name code');
+  const user = await User.findOne({ _id: req.params.id, organizationId: req.user.organizationId })
+    .populate('role')
+    .populate('warehouse', 'name code');
   if (!user) throw ApiError.notFound('المستخدم غير موجود');
   sendSuccess(res, { data: user.toSafeJSON() });
 });
@@ -46,11 +55,26 @@ const getById = asyncHandler(async (req, res) => {
 const create = asyncHandler(async (req, res) => {
   const { fullName, username, email, phone, password, role, warehouse, status } = req.body;
 
+  await assertUnderLimit(req.user.organizationId, 'users');
+
+  // Identifiers are globally unique (see models/User.js), so this dup check
+  // is intentionally cross-organization.
   const exists = await User.findOne({ $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }] });
   if (exists) throw ApiError.conflict('اسم المستخدم أو البريد الإلكتروني مستخدم مسبقاً');
 
+  // Role is scoped manually (see models/Role.js) — without this check a
+  // client could assign a role _id belonging to a different organization.
+  const roleDoc = await Role.findOne({ _id: role, organizationId: req.user.organizationId });
+  if (!roleDoc) throw ApiError.badRequest('الدور المحدد غير موجود في هذه المؤسسة');
+
+  if (warehouse) {
+    const warehouseDoc = await Warehouse.findById(warehouse);
+    if (!warehouseDoc) throw ApiError.badRequest('المخزن المحدد غير موجود في هذه المؤسسة');
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await User.create({
+    organizationId: req.user.organizationId,
     fullName,
     username: username.toLowerCase(),
     email: email.toLowerCase(),
@@ -75,7 +99,7 @@ const create = asyncHandler(async (req, res) => {
 });
 
 const update = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
+  const user = await User.findOne({ _id: req.params.id, organizationId: req.user.organizationId });
   if (!user) throw ApiError.notFound('المستخدم غير موجود');
 
   const before = user.toSafeJSON();
@@ -88,8 +112,18 @@ const update = asyncHandler(async (req, res) => {
   }
   if (fullName !== undefined) user.fullName = fullName;
   if (phone !== undefined) user.phone = phone;
-  if (role !== undefined) user.role = role;
-  if (warehouse !== undefined) user.warehouse = warehouse || null;
+  if (role !== undefined) {
+    const roleDoc = await Role.findOne({ _id: role, organizationId: req.user.organizationId });
+    if (!roleDoc) throw ApiError.badRequest('الدور المحدد غير موجود في هذه المؤسسة');
+    user.role = role;
+  }
+  if (warehouse !== undefined) {
+    if (warehouse) {
+      const warehouseDoc = await Warehouse.findById(warehouse);
+      if (!warehouseDoc) throw ApiError.badRequest('المخزن المحدد غير موجود في هذه المؤسسة');
+    }
+    user.warehouse = warehouse || null;
+  }
   if (status !== undefined) user.status = status;
 
   await user.save();
@@ -110,7 +144,7 @@ const update = asyncHandler(async (req, res) => {
 
 const setStatus = (targetStatus) =>
   asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id);
+    const user = await User.findOne({ _id: req.params.id, organizationId: req.user.organizationId });
     if (!user) throw ApiError.notFound('المستخدم غير موجود');
 
     if (req.user._id.equals(user._id) && targetStatus === 'disabled') {
@@ -136,7 +170,7 @@ const setStatus = (targetStatus) =>
   });
 
 const resetPassword = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
+  const user = await User.findOne({ _id: req.params.id, organizationId: req.user.organizationId });
   if (!user) throw ApiError.notFound('المستخدم غير موجود');
 
   const { newPassword } = req.body;

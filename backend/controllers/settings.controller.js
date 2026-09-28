@@ -13,7 +13,23 @@ async function getSingleton() {
 
 // ✅ بيانات المؤسسة العامة فقط لرأس صفحات الطباعة — بدون أي إعدادات حساسة
 // (inventory/documents/backup/setupCompleted... إلخ تبقى خلف /settings المحمي)
+//
+// Reachable both signed-out (Login page branding) and signed-in (print
+// headers, barcode labels) — see middleware/auth.js's `optionalAuthenticate`.
+// Signed out, there is no organization to speak of yet, so this returns
+// empty/default branding instead of querying any one organization's data;
+// the frontend already falls back to its own generic title/logo when these
+// come back empty (see Login.vue).
 const publicInfo = asyncHandler(async (req, res) => {
+  if (!req.user) {
+    return sendSuccess(res, {
+      data: {
+        company: { name: '', logo: null, address: '', phone: '', email: '', taxNumber: '' },
+        system: { currency: 'JOD', language: 'ar' },
+      },
+    });
+  }
+
   const settings = await getSingleton();
   sendSuccess(res, {
     data: {

@@ -1,7 +1,8 @@
-// Development-only convenience seed: default roles/units, a sample warehouse
-// and categories, and a super admin — so a fresh clone has something to look
-// at without clicking through the Setup Wizard by hand. Intentionally never
-// runs in production and never uses a fixed password (spec §55).
+// Development-only convenience seed: creates a demo organization with default
+// roles/units, a sample warehouse and categories, and an admin user — so a
+// fresh clone has something to look at without clicking through registration
+// by hand. Intentionally never runs in production and never uses a fixed
+// password (spec §55).
 require('dotenv').config();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
@@ -11,6 +12,8 @@ const env = require('../config/env');
 const { connectDB } = require('../config/db');
 const { ensureDefaultRoles } = require('../services/roleService');
 const { DEFAULT_UNITS } = require('../constants/defaultUnits');
+const tenantContext = require('./tenantContext');
+const Organization = require('../models/Organization');
 const User = require('../models/User');
 const Warehouse = require('../models/Warehouse');
 const Unit = require('../models/Unit');
@@ -23,7 +26,7 @@ const SAMPLE_CATEGORIES = [
 
 async function seed() {
   if (env.NODE_ENV === 'production') {
-    console.error('[Seed] Refusing to run in production. Use the in-app Setup Wizard instead.');
+    console.error('[Seed] Refusing to run in production. Use the in-app registration flow instead.');
     process.exit(1);
   }
 
@@ -36,59 +39,69 @@ async function seed() {
     return;
   }
 
-  const roles = await ensureDefaultRoles();
-  console.log('[Seed] Default roles ready:', Object.keys(roles).join(', '));
-
-  let warehouse = await Warehouse.findOne({ isMain: true });
-  if (!warehouse) {
-    warehouse = await Warehouse.create({ name: 'المخزن الرئيسي', code: 'MAIN', isMain: true });
-    console.log('[Seed] Created sample warehouse: المخزن الرئيسي (MAIN)');
+  let organization = await Organization.findOne({ name: 'شركة تجريبية' });
+  if (!organization) {
+    organization = await Organization.create({ name: 'شركة تجريبية' });
+    console.log('[Seed] Created demo organization: شركة تجريبية');
   }
 
-  const unitCount = await Unit.countDocuments();
-  if (unitCount === 0) {
-    await Unit.insertMany(DEFAULT_UNITS.map((u) => ({ ...u, active: true })));
-    console.log(`[Seed] Created ${DEFAULT_UNITS.length} default units`);
-  }
+  await tenantContext.run(organization._id, async () => {
+    const roles = await ensureDefaultRoles(organization._id);
+    console.log('[Seed] Default roles ready:', Object.keys(roles).join(', '));
 
-  const categoryCount = await Category.countDocuments();
-  if (categoryCount === 0) {
-    for (const parent of SAMPLE_CATEGORIES) {
-      const parentDoc = await Category.create({ nameAr: parent.nameAr });
-      for (const childName of parent.children) {
-        await Category.create({ nameAr: childName, parent: parentDoc._id });
-      }
+    let warehouse = await Warehouse.findOne({ isMain: true });
+    if (!warehouse) {
+      warehouse = await Warehouse.create({ name: 'المخزن الرئيسي', code: 'MAIN', isMain: true });
+      console.log('[Seed] Created sample warehouse: المخزن الرئيسي (MAIN)');
     }
-    console.log('[Seed] Created sample categories (قطع غيار > محركات، فلاتر، كهرباء)');
-  }
 
-  // Never a fixed password: use SEED_ADMIN_PASSWORD if the developer set one
-  // locally, otherwise generate a random one and print it once.
-  const password = process.env.SEED_ADMIN_PASSWORD || crypto.randomBytes(9).toString('base64url');
-  const passwordHash = await bcrypt.hash(password, 12);
-  const admin = await User.create({
-    fullName: 'مدير النظام',
-    username: 'admin',
-    email: 'admin@example.com',
-    passwordHash,
-    role: roles['super-admin']._id,
-    warehouse: warehouse._id,
-    status: 'active',
-  });
+    const unitCount = await Unit.countDocuments();
+    if (unitCount === 0) {
+      await Unit.insertMany(DEFAULT_UNITS.map((u) => ({ ...u, active: true })));
+      console.log(`[Seed] Created ${DEFAULT_UNITS.length} default units`);
+    }
 
-  const settingsExists = await Settings.findOne();
-  if (!settingsExists) {
-    await Settings.create({
-      company: { name: 'شركة تجريبية' },
-      inventory: { defaultWarehouse: warehouse._id },
-      setupCompleted: true,
+    const categoryCount = await Category.countDocuments();
+    if (categoryCount === 0) {
+      for (const parent of SAMPLE_CATEGORIES) {
+        const parentDoc = await Category.create({ nameAr: parent.nameAr });
+        for (const childName of parent.children) {
+          await Category.create({ nameAr: childName, parent: parentDoc._id });
+        }
+      }
+      console.log('[Seed] Created sample categories (قطع غيار > محركات، فلاتر، كهرباء)');
+    }
+
+    // Never a fixed password: use SEED_ADMIN_PASSWORD if the developer set one
+    // locally, otherwise generate a random one and print it once.
+    const password = process.env.SEED_ADMIN_PASSWORD || crypto.randomBytes(9).toString('base64url');
+    const passwordHash = await bcrypt.hash(password, 12);
+    const admin = await User.create({
+      organizationId: organization._id,
+      fullName: 'مدير النظام',
+      username: 'admin',
+      email: 'admin@example.com',
+      passwordHash,
+      role: roles['super-admin']._id,
+      warehouse: warehouse._id,
+      status: 'active',
+      isPlatformAdmin: true,
     });
-  }
 
-  console.log('\n[Seed] Done. Super admin created:');
-  console.log(`  username: ${admin.username}`);
-  console.log(`  password: ${password}`);
-  console.log('  (save this now — it is not stored anywhere in plain text)\n');
+    const settingsExists = await Settings.findOne();
+    if (!settingsExists) {
+      await Settings.create({
+        company: { name: 'شركة تجريبية' },
+        inventory: { defaultWarehouse: warehouse._id },
+        setupCompleted: true,
+      });
+    }
+
+    console.log('\n[Seed] Done. Admin user created:');
+    console.log(`  username: ${admin.username}`);
+    console.log(`  password: ${password}`);
+    console.log('  (save this now — it is not stored anywhere in plain text)\n');
+  });
 
   await mongoose.disconnect();
 }
