@@ -94,43 +94,62 @@ async function ensureIndex(db, collectionName, keys, options) {
 async function run(db) {
   console.log('[Migration 001] Starting multi-tenant backfill...\n');
 
-  // 1. Find or create the single default organization that will own every
-  // pre-existing document. Tagged with isMigrationDefault so re-runs find
-  // the same one instead of creating a second.
-  let defaultOrg = await db.collection('organizations').findOne({ isMigrationDefault: true });
-  if (!defaultOrg) {
-    const existingSettings = await db.collection('settings').findOne({});
-    const existingUser = await db.collection('users').findOne({}, { sort: { createdAt: 1 } });
-    const orgName = existingSettings?.company?.name || 'المؤسسة الافتراضية';
+  // 1. The default organization is created lazily — only the first time a
+  // document actually needs backfilling — not unconditionally up front. On a
+  // database with no pre-existing organizationId-less documents (e.g. a
+  // freshly created database, or one that has already been fully migrated),
+  // eagerly creating this org would leave a permanent, pointless "legacy"
+  // organization behind with nothing in it. Tagged with isMigrationDefault so
+  // repeated runs (and concurrent backfill iterations below) reuse the same
+  // one instead of creating a second.
+  let defaultOrg = null;
+  async function ensureDefaultOrg() {
+    if (defaultOrg) return defaultOrg;
+    defaultOrg = await db.collection('organizations').findOne({ isMigrationDefault: true });
+    if (!defaultOrg) {
+      const existingSettings = await db.collection('settings').findOne({});
+      const existingUser = await db.collection('users').findOne({}, { sort: { createdAt: 1 } });
+      const orgName = existingSettings?.company?.name || 'المؤسسة الافتراضية';
 
-    const insertResult = await db.collection('organizations').insertOne({
-      name: orgName,
-      status: 'active',
-      createdBy: existingUser?._id || null,
-      isMigrationDefault: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    defaultOrg = { _id: insertResult.insertedId, name: orgName };
-    console.log(`[Migration 001] Created default organization "${orgName}" (${defaultOrg._id})`);
-  } else {
-    console.log(`[Migration 001] Using existing default organization "${defaultOrg.name}" (${defaultOrg._id})`);
+      const insertResult = await db.collection('organizations').insertOne({
+        name: orgName,
+        status: 'active',
+        createdBy: existingUser?._id || null,
+        isMigrationDefault: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      defaultOrg = { _id: insertResult.insertedId, name: orgName };
+      console.log(`[Migration 001] Created default organization "${orgName}" (${defaultOrg._id})`);
+    } else {
+      console.log(`[Migration 001] Using existing default organization "${defaultOrg.name}" (${defaultOrg._id})`);
+    }
+    return defaultOrg;
   }
 
   // 2. Backfill organizationId onto every pre-existing document in every
   // tenant-scoped collection. Only touches documents that don't have it yet.
   console.log('\n[Migration 001] Backfilling organizationId...');
+  let backfilledAny = false;
   for (const collectionName of TENANT_COLLECTIONS) {
     const collections = await db.listCollections({ name: collectionName }).toArray();
     if (collections.length === 0) continue; // collection doesn't exist yet — nothing to backfill
 
+    const pendingCount = await db.collection(collectionName).countDocuments({ organizationId: { $exists: false } });
+    if (pendingCount === 0) continue;
+
+    const org = await ensureDefaultOrg();
     const result = await db.collection(collectionName).updateMany(
       { organizationId: { $exists: false } },
-      { $set: { organizationId: defaultOrg._id } }
+      { $set: { organizationId: org._id } }
     );
     if (result.modifiedCount > 0) {
+      backfilledAny = true;
       console.log(`  [backfill] ${collectionName}: ${result.modifiedCount} document(s)`);
     }
+  }
+  if (!backfilledAny) {
+    console.log('  [backfill] no documents needed organizationId — no default organization created');
   }
 
   // 3. Preserve existing users' exact prior capability: they could already

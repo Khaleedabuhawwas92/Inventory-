@@ -27,6 +27,42 @@ async function issueSessionFor(user, res, req) {
   return accessToken;
 }
 
+// withTransaction() silently falls back to a non-atomic sequential run on
+// standalone MongoDB (no replica set — see utils/withTransaction.js), so a
+// failure partway through registerCompany's writes can leave a real,
+// half-created Organization behind — which is exactly what previously caused
+// "duplicate value in field: name" on a later registration attempt with the
+// same name. This is a best-effort compensating rollback for that fallback
+// path: it deletes only documents scoped to the ONE organizationId this
+// specific failed attempt created, never anything pre-existing. It's safe to
+// call unconditionally after any failure — when a real transaction already
+// rolled back (replica set / Atlas), every deleteMany here simply matches
+// zero documents.
+async function compensateFailedRegistration(organizationId) {
+  if (!organizationId) return;
+  await tenantContext.run(organizationId, async () => {
+    const cleanups = [
+      ['Settings', () => Settings.deleteMany({ organizationId })],
+      ['Unit', () => Unit.deleteMany({ organizationId })],
+      ['User', () => User.deleteMany({ organizationId })],
+      ['Warehouse', () => Warehouse.deleteMany({ organizationId })],
+      ['Role', () => Role.deleteMany({ organizationId })],
+    ];
+    for (const [label, run] of cleanups) {
+      try {
+        await run();
+      } catch (cleanupErr) {
+        console.error(`[registerCompany] compensating rollback failed to clean ${label} for organization ${organizationId}:`, cleanupErr);
+      }
+    }
+  });
+  try {
+    await Organization.deleteOne({ _id: organizationId });
+  } catch (cleanupErr) {
+    console.error(`[registerCompany] compensating rollback failed to delete organization ${organizationId}:`, cleanupErr);
+  }
+}
+
 // Replaces the old one-time, system-wide Setup Wizard: instead of a single
 // gate that ran once for the entire deployment, any visitor can register a
 // brand new, fully independent organization at any time. The registering
@@ -43,54 +79,62 @@ const registerCompany = asyncHandler(async (req, res) => {
   });
   if (existingUser) throw ApiError.conflict('اسم المستخدم أو البريد الإلكتروني مستخدم مسبقاً');
 
-  const result = await withTransaction(async (session) => {
-    const [organization] = await Organization.create([{ name: organizationName }], { session });
+  let createdOrganizationId = null;
+  let result;
+  try {
+    result = await withTransaction(async (session) => {
+      const [organization] = await Organization.create([{ name: organizationName }], { session });
+      createdOrganizationId = organization._id;
 
-    return tenantContext.run(organization._id, async () => {
-      const roles = await ensureDefaultRoles(organization._id, [
-        'admin', 'warehouse-manager', 'employee', 'viewer',
-      ]);
+      return tenantContext.run(organization._id, async () => {
+        const roles = await ensureDefaultRoles(organization._id, [
+          'admin', 'warehouse-manager', 'employee', 'viewer',
+        ], session);
 
-      const [wh] = await Warehouse.create(
-        [{ name: warehouse.name, code: warehouse.code.toUpperCase(), address: warehouse.address || '', isMain: true }],
-        { session }
-      );
+        const [wh] = await Warehouse.create(
+          [{ name: warehouse.name, code: warehouse.code.toUpperCase(), address: warehouse.address || '', isMain: true }],
+          { session }
+        );
 
-      const passwordHash = await bcrypt.hash(admin.password, 12);
-      const [owner] = await User.create(
-        [{
-          organizationId: organization._id,
-          fullName: admin.fullName,
-          username: admin.username.toLowerCase(),
-          email: admin.email.toLowerCase(),
-          phone: admin.phone || '',
-          passwordHash,
-          role: roles.admin._id,
-          warehouse: wh._id,
-          status: 'active',
-        }],
-        { session }
-      );
+        const passwordHash = await bcrypt.hash(admin.password, 12);
+        const [owner] = await User.create(
+          [{
+            organizationId: organization._id,
+            fullName: admin.fullName,
+            username: admin.username.toLowerCase(),
+            email: admin.email.toLowerCase(),
+            phone: admin.phone || '',
+            passwordHash,
+            role: roles.admin._id,
+            warehouse: wh._id,
+            status: 'active',
+          }],
+          { session }
+        );
 
-      organization.createdBy = owner._id;
-      await organization.save({ session });
+        organization.createdBy = owner._id;
+        await organization.save({ session });
 
-      const unitDocs = (units && units.length ? units : DEFAULT_UNITS).map((u) => ({ ...u, active: true }));
-      await Unit.insertMany(unitDocs, { session });
+        const unitDocs = (units && units.length ? units : DEFAULT_UNITS).map((u) => ({ ...u, active: true }));
+        await Unit.insertMany(unitDocs, { session });
 
-      await Settings.create(
-        [{
-          company: { name: organizationName },
-          system: { currency: currency || 'JOD' },
-          inventory: { defaultWarehouse: wh._id },
-          setupCompleted: true,
-        }],
-        { session }
-      );
+        await Settings.create(
+          [{
+            company: { name: organizationName },
+            system: { currency: currency || 'JOD' },
+            inventory: { defaultWarehouse: wh._id },
+            setupCompleted: true,
+          }],
+          { session }
+        );
 
-      return { organization, owner, warehouse: wh };
+        return { organization, owner, warehouse: wh };
+      });
     });
-  });
+  } catch (err) {
+    await compensateFailedRegistration(createdOrganizationId);
+    throw err;
+  }
 
   // Callbacks passed to tenantContext.run must *await* every query inside
   // their own body (not just return an un-awaited Query/thenable) — a

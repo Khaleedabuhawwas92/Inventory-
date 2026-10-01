@@ -24,12 +24,25 @@ function errorHandler(err, req, res, next) {
     message = `معرّف غير صالح: ${err.value}`;
   }
 
-  // Mongo duplicate key
+  // Mongo duplicate key. The Arabic message stays generic (field name only)
+  // since it's user-facing, but which collection/index actually collided is
+  // essential for diagnosing stale-index bugs like the multi-tenant
+  // registration issue this was added for — so log that detail separately in
+  // non-production instead of relying on parsing it out of err.message.
   if (err.code === 11000) {
     statusCode = 409;
     const field = Object.keys(err.keyValue || {})[0];
     message = field ? `القيمة مستخدمة مسبقاً في الحقل: ${field}` : 'قيمة مكررة غير مسموح بها';
     errors = [{ field, value: err.keyValue?.[field] }];
+
+    if (env.NODE_ENV !== 'production') {
+      console.error('[DUPLICATE KEY]', {
+        collection: err.collection?.collectionName || err.namespace || null,
+        keyPattern: err.keyPattern || null,
+        keyValue: err.keyValue || null,
+        message: err.message,
+      });
+    }
   }
 
   // JWT errors
@@ -52,6 +65,11 @@ function errorHandler(err, req, res, next) {
     success: false,
     message,
     errors,
+    // Only a string code (ApiError's own, e.g. 'SESSION_REVOKED') is ever
+    // forwarded here — err.code is also how the Mongo driver reports a
+    // numeric duplicate-key code (11000, handled above), which must never
+    // leak into this field.
+    ...(typeof err.code === 'string' ? { code: err.code } : {}),
     ...(env.NODE_ENV !== 'production' ? { stack: err.stack } : {}),
   });
 }

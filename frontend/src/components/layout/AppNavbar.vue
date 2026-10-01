@@ -63,7 +63,15 @@ async function markAllRead() {
 
 onMounted(() => {
   loadUnreadCount();
-  pollTimer = setInterval(loadUnreadCount, 60000);
+  // This poll runs for as long as the authenticated layout (MainLayout,
+  // which owns this navbar) is mounted, so besides refreshing the badge it
+  // doubles as the idle session-revocation heartbeat: if a Platform Admin
+  // force-logs-out this user, the api.js response interceptor catches the
+  // 401 SESSION_REVOKED on the *next* tick of this request and redirects to
+  // /login — even if the user isn't actively clicking anything else. Kept
+  // in the 15-30s range for that purpose; unmounting (on navigation to
+  // /login, which lives outside MainLayout) clears it below.
+  pollTimer = setInterval(loadUnreadCount, 25000);
 });
 onUnmounted(() => clearInterval(pollTimer));
 

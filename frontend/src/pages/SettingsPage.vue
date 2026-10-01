@@ -38,8 +38,8 @@ const form = reactive({
 
 const backups = ref([]);
 const backupsLoading = ref(true);
+const backupsFeatureDisabled = ref(false);
 const backingUp = ref(false);
-const isSuperAdmin = computed(() => auth.isSuperAdmin);
 
 // ✅ شعار المؤسسة — يُرفع/يُحذف فوراً عبر endpoint مستقل (multipart)،
 // منفصل عن حفظ باقي حقول tab "المؤسسة" النصية (JSON عبر saveTab)
@@ -113,11 +113,16 @@ async function saveTab(section) {
 
 async function loadBackups() {
   backupsLoading.value = true;
+  backupsFeatureDisabled.value = false;
   try {
     const { data } = await backupService.list();
     backups.value = data.data;
   } catch (err) {
-    toast.error('تعذر تحميل قائمة النسخ الاحتياطية');
+    if (err.response?.data?.code === 'FEATURE_DISABLED') {
+      backupsFeatureDisabled.value = true;
+    } else {
+      toast.error('تعذر تحميل قائمة النسخ الاحتياطية');
+    }
   } finally {
     backupsLoading.value = false;
   }
@@ -307,30 +312,34 @@ onMounted(async () => {
 
       <!-- Backup -->
       <div v-if="activeTab === 'backup'" class="space-y-4">
-        <div class="card p-6 max-w-2xl space-y-4">
-          <div class="flex items-center gap-2">
-            <input id="autoBackup" v-model="form.backup.autoBackupEnabled" type="checkbox" class="rounded border-slate-300 text-primary-600" />
-            <label for="autoBackup" class="text-sm text-slate-600 dark:text-slate-300">تفعيل النسخ الاحتياطي التلقائي</label>
-          </div>
-          <div v-if="form.backup.autoBackupEnabled">
-            <label class="label">التكرار</label>
-            <select v-model="form.backup.frequency" class="input !w-auto">
-              <option value="daily">يومي</option>
-              <option value="weekly">أسبوعي</option>
-              <option value="monthly">شهري</option>
-            </select>
-          </div>
-          <div class="flex items-center gap-3">
-            <button class="btn-primary" :disabled="saving" @click="saveTab('backup')">حفظ الإعدادات</button>
-            <button class="btn-outline" :disabled="backingUp" @click="createBackup">{{ backingUp ? 'جاري الإنشاء...' : 'إنشاء نسخة احتياطية الآن' }}</button>
-          </div>
+        <div v-if="backupsFeatureDisabled" class="card p-6">
+          <EmptyState title="ميزة النسخ الاحتياطي غير مفعلة لهذه المؤسسة" />
         </div>
+        <template v-else>
+          <div class="card p-6 max-w-2xl space-y-4">
+            <div class="flex items-center gap-2">
+              <input id="autoBackup" v-model="form.backup.autoBackupEnabled" type="checkbox" class="rounded border-slate-300 text-primary-600" />
+              <label for="autoBackup" class="text-sm text-slate-600 dark:text-slate-300">تفعيل النسخ الاحتياطي التلقائي</label>
+            </div>
+            <div v-if="form.backup.autoBackupEnabled">
+              <label class="label">التكرار</label>
+              <select v-model="form.backup.frequency" class="input !w-auto">
+                <option value="daily">يومي</option>
+                <option value="weekly">أسبوعي</option>
+                <option value="monthly">شهري</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-3">
+              <button class="btn-primary" :disabled="saving" @click="saveTab('backup')">حفظ الإعدادات</button>
+              <button class="btn-outline" :disabled="backingUp" @click="createBackup">{{ backingUp ? 'جاري الإنشاء...' : 'إنشاء نسخة احتياطية الآن' }}</button>
+            </div>
+          </div>
 
-        <div class="card p-6">
-          <h3 class="font-bold text-slate-700 dark:text-slate-200 mb-3">النسخ الاحتياطية المتوفرة</h3>
-          <LoadingSpinner v-if="backupsLoading" />
-          <EmptyState v-else-if="!backups.length" title="لا توجد نسخ احتياطية بعد" />
-          <table v-else class="table-base">
+          <div class="card p-6">
+            <h3 class="font-bold text-slate-700 dark:text-slate-200 mb-3">النسخ الاحتياطية المتوفرة</h3>
+            <LoadingSpinner v-if="backupsLoading" />
+            <EmptyState v-else-if="!backups.length" title="لا توجد نسخ احتياطية حتى الآن" />
+            <table v-else class="table-base">
             <thead><tr><th>التاريخ</th><th>النوع</th><th>الحجم</th><th>عدد السجلات</th><th></th></tr></thead>
             <tbody>
               <tr v-for="b in backups" :key="b.id">
@@ -340,15 +349,15 @@ onMounted(async () => {
                 <td>{{ b.collections.reduce((s, c) => s + c.count, 0) }}</td>
                 <td>
                   <div class="flex items-center gap-2 justify-end">
-                    <button v-if="isSuperAdmin" class="btn-outline !px-2 !py-1 text-xs text-red-600" @click="restoreBackup(b)">استرجاع</button>
-                    <button v-if="isSuperAdmin" class="btn-outline !px-2 !py-1 text-xs" @click="deleteBackup(b)">حذف</button>
+                    <button class="btn-outline !px-2 !py-1 text-xs text-red-600" @click="restoreBackup(b)">استرجاع</button>
+                    <button class="btn-outline !px-2 !py-1 text-xs" @click="deleteBackup(b)">حذف</button>
                   </div>
                 </td>
               </tr>
             </tbody>
           </table>
-          <p v-if="!isSuperAdmin" class="text-xs text-slate-400 mt-3">الاسترجاع والحذف متاحان لمدير النظام العام (Super Admin) فقط.</p>
-        </div>
+          </div>
+        </template>
       </div>
     </template>
   </div>

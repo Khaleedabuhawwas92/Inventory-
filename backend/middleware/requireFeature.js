@@ -13,7 +13,7 @@ module.exports = function requireFeature(featureName) {
   return asyncHandler(async (req, res, next) => {
     const org = await Organization.findById(req.user.organizationId).select('features');
     if (org?.features && org.features[featureName] === false) {
-      throw ApiError.forbidden('هذه الميزة غير مفعّلة لمؤسستك حالياً، الرجاء التواصل مع الدعم لتفعيلها');
+      throw ApiError.forbidden('هذه الميزة غير مفعّلة لمؤسستك حالياً، الرجاء التواصل مع الدعم لتفعيلها', 'FEATURE_DISABLED');
     }
     next();
   });

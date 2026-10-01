@@ -214,7 +214,7 @@ test('platform admin — advanced organization management', async (t) => {
   });
 
   // (K) Revoke organization sessions works.
-  await t.test('K. revoking an organization\'s sessions revokes every user in it, and no one outside it', async () => {
+  await t.test('K. revoking an organization\'s sessions revokes every user in it except the calling platform admin, and no one outside it', async () => {
     const rawAdmin = await tokenService.issueRefreshToken({ _id: orgAAdminId });
     const rawSecond = await tokenService.issueRefreshToken({ _id: orgASecondUserId });
     const orgBUsers = await api('GET', `/platform/organizations/${orgBId}/users`, { token: platformToken });
@@ -223,14 +223,19 @@ test('platform admin — advanced organization management', async (t) => {
 
     const res = await api('POST', `/platform/organizations/${orgAId}/revoke-sessions`, { token: platformToken, body: { reason: 'صيانة أمنية' } });
     assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.data.usersAffected, 2);
+    // orgAAdminId is both a member of org A AND the platform admin making this
+    // call (platformToken) — excluded so the operator doesn't lock themselves
+    // out of the Platform Admin app they're using right now (see
+    // controllers/platform/organizationDetail.controller.js).
+    assert.equal(res.body.data.usersAffected, 1);
+    assert.equal(res.body.data.selfExcluded, true);
 
     const [tAdmin, tSecond, tOrgB] = await Promise.all([
       RefreshToken.findOne({ tokenHash: tokenService.hashToken(rawAdmin) }),
       RefreshToken.findOne({ tokenHash: tokenService.hashToken(rawSecond) }),
       RefreshToken.findOne({ tokenHash: tokenService.hashToken(rawOrgB) }),
     ]);
-    assert.equal(tAdmin.revoked, true);
+    assert.equal(tAdmin.revoked, false, 'the calling platform admin\'s own session must be excluded from a tenant-wide revoke');
     assert.equal(tSecond.revoked, true);
     assert.equal(tOrgB.revoked, false, 'org B\'s sessions must never be touched by org A\'s revoke-all');
   });

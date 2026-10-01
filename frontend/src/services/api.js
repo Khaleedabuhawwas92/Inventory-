@@ -37,12 +37,35 @@ function resolveQueue(error, token) {
   refreshQueue = [];
 }
 
+// Clears all local auth state and tells the rest of the app the session is
+// gone, for good — used both by the SESSION_REVOKED fast path below and by
+// an ordinary failed-refresh. `detail.code` lets App.vue show "logged out by
+// an administrator" instead of the generic "your session expired" message
+// when that's specifically what happened (see middleware/auth.js on the
+// backend, which is the only place that ever sets this code).
+function forceLogout(code) {
+  localStorage.removeItem('accessToken');
+  window.dispatchEvent(new CustomEvent('auth:session-expired', { detail: { code } }));
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const { config, response } = error;
 
     if (!response || response.status !== 401 || config?._retry || config?.url?.includes('/auth/')) {
+      return Promise.reject(error);
+    }
+
+    // An admin-forced logout (Platform Admin "revoke sessions") invalidates
+    // the refresh token server-side too (see backend tokenService.js
+    // revokeAllForUser), so attempting /auth/refresh here would only fail a
+    // moment later anyway — skip straight to logging out, both to avoid a
+    // pointless round-trip and because this is the one place that reliably
+    // carries the SESSION_REVOKED code (a failed /auth/refresh reports a
+    // generic expired-session message instead, see auth.controller.js).
+    if (response.data?.code === 'SESSION_REVOKED') {
+      forceLogout('SESSION_REVOKED');
       return Promise.reject(error);
     }
 
@@ -68,8 +91,7 @@ api.interceptors.response.use(
       return api(config);
     } catch (refreshError) {
       resolveQueue(refreshError, null);
-      localStorage.removeItem('accessToken');
-      window.dispatchEvent(new CustomEvent('auth:session-expired'));
+      forceLogout(refreshError.response?.data?.code);
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

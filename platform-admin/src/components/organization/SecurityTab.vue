@@ -54,7 +54,8 @@ async function revokeAllSessions() {
   revoking.value = true;
   try {
     const { data } = await platformService.revokeOrganizationSessions(props.organizationId, revokeReason.value.trim() || undefined);
-    toast.success(`تم تسجيل خروج ${data.data.usersAffected} مستخدم`);
+    const note = data.data.selfExcluded ? ' (باستثناء جلستك الحالية كمدير منصة)' : '';
+    toast.success(`تم تسجيل خروج ${data.data.usersAffected} مستخدم${note}`);
     revokeReason.value = '';
   } catch (err) {
     toast.error(err.response?.data?.message || 'حدث خطأ ما');

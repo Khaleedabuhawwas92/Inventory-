@@ -41,10 +41,11 @@ async function retryConnection() {
   retrying.value = false;
 }
 
-function handleSessionExpired() {
+function handleSessionExpired(event) {
   if (auth.isAuthenticated) {
     auth.clearSession();
-    toast.info('انتهت جلستك، الرجاء تسجيل الدخول مجدداً');
+    const revoked = event?.detail?.code === 'SESSION_REVOKED';
+    toast.info(revoked ? 'تم تسجيل خروجك من النظام بواسطة الإدارة.' : 'انتهت جلستك، الرجاء تسجيل الدخول مجدداً');
     router.push({ name: 'login' });
   }
 }

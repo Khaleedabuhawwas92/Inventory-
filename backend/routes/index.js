@@ -34,6 +34,7 @@ router.use('/search', require('./search.routes'));
 router.use('/notifications', require('./notification.routes'));
 router.use('/audit-logs', require('./auditLog.routes'));
 router.use('/backups', require('./backup.routes'));
+router.use('/org-backups', require('./orgBackup.routes'));
 router.use('/platform', require('./platform.routes'));
 
 // Feature routes are mounted here as later phases are implemented.

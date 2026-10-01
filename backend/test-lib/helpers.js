@@ -28,16 +28,30 @@ async function stopServer() {
   await new Promise((resolve) => server.close(resolve));
 }
 
-async function api(method, path, { body, token } = {}) {
+// `cookie` sends a raw Cookie header (e.g. the refresh-token cookie captured
+// from a previous response's `setCookie`); Node's fetch has no automatic
+// cookie jar, unlike a browser, so refresh-token tests thread it through
+// manually. The result's `setCookie` is the raw Set-Cookie header value (if
+// any), for the caller to pass into the next request.
+async function api(method, path, { body, token, cookie } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (cookie) headers.Cookie = cookie;
   const res = await fetch(`${baseUrl}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => null);
-  return { status: res.status, body: json };
+  return { status: res.status, body: json, setCookie: res.headers.get('set-cookie') };
 }
 
-module.exports = { startServer, stopServer, api };
+// Pulls just the "name=value" pair out of a raw Set-Cookie header (dropping
+// Path/HttpOnly/SameSite/... attributes), ready to pass back as `cookie` on
+// the next api() call.
+function cookieValue(setCookieHeader) {
+  if (!setCookieHeader) return null;
+  return setCookieHeader.split(';')[0];
+}
+
+module.exports = { startServer, stopServer, api, cookieValue };

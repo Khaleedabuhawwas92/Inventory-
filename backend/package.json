@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "seed": "node utils/seed.js",
     "migrate": "node migrations/001_multi_tenant_backfill.js",
+    "platform-admin:create": "node scripts/create-platform-admin.js",
     "test": "node --test test/"
   },
   "dependencies": {

@@ -25,6 +25,20 @@ async function loadUserFromToken(req) {
   // utils/populateUserRefs.js for why populate can't happen before this).
   const user = await User.findById(payload.sub);
   if (!user) throw ApiError.unauthorized('المستخدم غير موجود');
+
+  // Forced logout (see services/tokenService.js revokeAllForUser(s)): the
+  // JWT itself is still cryptographically valid and unexpired, so this
+  // version check is the only thing that actually invalidates it the
+  // moment an admin revokes the session — rejecting it here, on every
+  // request, rather than trusting the token's claims alone. `payload.v` is
+  // missing on tokens signed before this field existed; treated as 0 so
+  // those keep working until the first real revocation bumps the user past
+  // it, instead of mass-invalidating every session on deploy.
+  const tokenVersion = payload.v || 0;
+  if (tokenVersion !== (user.authVersion || 0)) {
+    throw ApiError.unauthorized('تم تسجيل خروجك من النظام بواسطة الإدارة', 'SESSION_REVOKED');
+  }
+
   if (user.status !== 'active') throw ApiError.forbidden('تم تعطيل هذا الحساب');
 
   await populateUserRefs(user);

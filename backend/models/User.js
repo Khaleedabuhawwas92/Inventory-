@@ -21,6 +21,14 @@ const userSchema = new mongoose.Schema(
     // system-wide, cross-organization actions (whole-database backup/restore)
     // that must never be reachable by an ordinary organization's own admin.
     isPlatformAdmin: { type: Boolean, default: false },
+    // Bumped by tokenService.revokeAllForUser(s)() — every access JWT embeds
+    // the authVersion it was signed with (see tokenService.signAccessToken),
+    // and middleware/auth.js rejects a token whose version no longer matches
+    // this field. This is what makes "forced logout" actually force out an
+    // already-issued, still-unexpired access token — revoking refresh tokens
+    // alone only stops a FUTURE renewal, it does nothing about a token the
+    // client already has in memory.
+    authVersion: { type: Number, default: 0 },
     status: { type: String, enum: ['active', 'disabled'], default: 'active' },
     profileImage: { type: String, default: null },
     theme: { type: String, enum: ['light', 'dark'], default: 'light' },

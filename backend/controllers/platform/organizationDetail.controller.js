@@ -661,11 +661,22 @@ const revokeOrganizationSessions = asyncHandler(async (req, res) => {
   const { reason } = req.body;
   const org = await requireOrganization(req.params.id);
 
-  const revokedCount = await tenantContext.runWithoutTenant(async () => {
-    const users = await User.find({ organizationId: org._id }).select('_id');
+  // A Platform Admin's own tenant-side user account belongs to exactly one
+  // organization (see models/User.js), same as anyone else's. If that
+  // happens to be the organization being revoked, excluding their own user
+  // id here is what keeps them from immediately 401-ing themselves out of
+  // the very Platform Admin session they're using to run this action —
+  // revocation now takes effect on the next request (see
+  // services/tokenService.js authVersion), not just on next token refresh.
+  const excludeSelf = req.user.organizationId?.toString() === org._id.toString();
+
+  const { revokedCount, selfExcluded } = await tenantContext.runWithoutTenant(async () => {
+    const filter = { organizationId: org._id };
+    if (excludeSelf) filter._id = { $ne: req.user._id };
+    const users = await User.find(filter).select('_id');
     const userIds = users.map((u) => u._id);
     await tokenService.revokeAllForUsers(userIds);
-    return userIds.length;
+    return { revokedCount: userIds.length, selfExcluded: excludeSelf };
   });
 
   await tenantContext.run(org._id, () =>
@@ -674,11 +685,11 @@ const revokeOrganizationSessions = asyncHandler(async (req, res) => {
       action: 'UPDATE',
       entityType: 'Organization',
       entityId: org._id,
-      description: `[PLATFORM] تم تسجيل خروج جميع مستخدمي المؤسسة (${revokedCount}) بواسطة مدير المنصة${reason ? ` — السبب: ${reason.trim()}` : ''}`,
+      description: `[PLATFORM] تم تسجيل خروج جميع مستخدمي المؤسسة (${revokedCount}) بواسطة مدير المنصة${selfExcluded ? ' (باستثناء جلسة المدير الحالية)' : ''}${reason ? ` — السبب: ${reason.trim()}` : ''}`,
     })
   );
 
-  sendSuccess(res, { message: 'تم تسجيل خروج جميع مستخدمي المؤسسة', data: { usersAffected: revokedCount } });
+  sendSuccess(res, { message: 'تم تسجيل خروج جميع مستخدمي المؤسسة', data: { usersAffected: revokedCount, selfExcluded } });
 });
 
 // ---------------------------------------------------------------------------
