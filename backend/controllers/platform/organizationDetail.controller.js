@@ -15,6 +15,7 @@ const StockMovement = require('../../models/StockMovement');
 const Invitation = require('../../models/Invitation');
 const PlatformOrganizationNote = require('../../models/PlatformOrganizationNote');
 const tokenService = require('../../services/tokenService');
+const subscriptionService = require('../../services/subscriptionService');
 const { getUsageAndLimits } = require('../../services/limitsService');
 
 // Every handler below explicitly filters by *this URL param* organizationId
@@ -530,9 +531,16 @@ function pickSubscription(org) {
   return out;
 }
 
+// effectiveStatus is read-only context, never an editable field: it's what
+// services/subscriptionService.js actually enforces right now, computed
+// fresh from plan/dates — which can disagree with the stored
+// subscriptionStatus above (e.g. "ACTIVE" sitting next to a subscriptionEndsAt
+// long in the past, since nothing ever flips that field on its own). Shown
+// so a platform admin isn't misled by a stale label into thinking an
+// organization still has access when it doesn't, or vice versa.
 const getSubscription = asyncHandler(async (req, res) => {
   const org = await requireOrganization(req.params.id);
-  sendSuccess(res, { data: pickSubscription(org) });
+  sendSuccess(res, { data: { ...pickSubscription(org), effectiveStatus: subscriptionService.getEffectiveSubscriptionStatus(org) } });
 });
 
 const updateSubscription = asyncHandler(async (req, res) => {
@@ -563,7 +571,7 @@ const updateSubscription = asyncHandler(async (req, res) => {
     })
   );
 
-  sendSuccess(res, { message: 'تم تحديث بيانات الاشتراك', data: pickSubscription(org) });
+  sendSuccess(res, { message: 'تم تحديث بيانات الاشتراك', data: { ...pickSubscription(org), effectiveStatus: subscriptionService.getEffectiveSubscriptionStatus(org) } });
 });
 
 // ---------------------------------------------------------------------------

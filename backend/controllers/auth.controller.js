@@ -4,6 +4,7 @@ const { sendSuccess } = require('../utils/apiResponse');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const tokenService = require('../services/tokenService');
+const subscriptionService = require('../services/subscriptionService');
 const auditService = require('../services/auditService');
 const tenantContext = require('../utils/tenantContext');
 const populateUserRefs = require('../utils/populateUserRefs');
@@ -62,6 +63,16 @@ const login = asyncHandler(async (req, res) => {
     const organization = await Organization.findById(user.organizationId);
     if (!organization || organization.status !== 'active') {
       throw ApiError.forbidden('تم تعليق هذه المؤسسة، الرجاء التواصل مع الدعم');
+    }
+
+    // See middleware/auth.js for the matching per-request check (the same
+    // gate must hold for an already-issued token, not just at the login
+    // moment), including the isPlatformAdmin exemption applied the same way
+    // here, and services/subscriptionService.js for why this is computed
+    // fresh from plan/dates rather than trusted from a stored status field.
+    if (!user.isPlatformAdmin) {
+      const block = subscriptionService.getBlockInfo(organization);
+      if (block) throw ApiError.forbidden(block.message, block.code);
     }
 
     if (user.isLocked()) {

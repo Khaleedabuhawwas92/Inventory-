@@ -44,8 +44,16 @@ async function retryConnection() {
 function handleSessionExpired(event) {
   if (auth.isAuthenticated) {
     auth.clearSession();
-    const revoked = event?.detail?.code === 'SESSION_REVOKED';
-    toast.info(revoked ? 'تم تسجيل خروجك من النظام بواسطة الإدارة.' : 'انتهت جلستك، الرجاء تسجيل الدخول مجدداً');
+    const { code, message } = event?.detail || {};
+    // SESSION_REVOKED keeps its own fixed wording; a subscription block
+    // (SUBSCRIPTION_EXPIRED / _TRIAL_EXPIRED / _SUSPENDED) shows the backend's
+    // own message since the right wording differs by which one it is (see
+    // services/subscriptionService.js) — anything else falls back to the
+    // generic expired-session message.
+    let text = 'انتهت جلستك، الرجاء تسجيل الدخول مجدداً';
+    if (code === 'SESSION_REVOKED') text = 'تم تسجيل خروجك من النظام بواسطة الإدارة.';
+    else if (code?.startsWith('SUBSCRIPTION_') && message) text = message;
+    toast.info(text);
     router.push({ name: 'login' });
   }
 }

@@ -38,20 +38,29 @@ function resolveQueue(error, token) {
 }
 
 // Clears all local auth state and tells the rest of the app the session is
-// gone, for good — used both by the SESSION_REVOKED fast path below and by
-// an ordinary failed-refresh. `detail.code` lets App.vue show "logged out by
-// an administrator" instead of the generic "your session expired" message
-// when that's specifically what happened (see middleware/auth.js on the
-// backend, which is the only place that ever sets this code).
-function forceLogout(code) {
+// gone, for good — used by the SESSION_REVOKED/SUBSCRIPTION_* fast paths
+// below and by an ordinary failed-refresh. `detail.code`/`detail.message`
+// let App.vue show the specific reason instead of the generic "your session
+// expired" message when the backend gave one (see middleware/auth.js and
+// services/subscriptionService.js).
+function forceLogout(code, message) {
   localStorage.removeItem('accessToken');
-  window.dispatchEvent(new CustomEvent('auth:session-expired', { detail: { code } }));
+  window.dispatchEvent(new CustomEvent('auth:session-expired', { detail: { code, message } }));
 }
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const { config, response } = error;
+
+    // Subscription enforcement (middleware/auth.js) is a 403, not a 401, and
+    // refreshing the access token never fixes it — the organization itself
+    // is blocked, independent of which token is used. Handled before the
+    // 401/refresh logic below, which doesn't apply here at all.
+    if (response?.status === 403 && response.data?.code?.startsWith('SUBSCRIPTION_')) {
+      forceLogout(response.data.code, response.data.message);
+      return Promise.reject(error);
+    }
 
     if (!response || response.status !== 401 || config?._retry || config?.url?.includes('/auth/')) {
       return Promise.reject(error);
@@ -65,7 +74,7 @@ api.interceptors.response.use(
     // carries the SESSION_REVOKED code (a failed /auth/refresh reports a
     // generic expired-session message instead, see auth.controller.js).
     if (response.data?.code === 'SESSION_REVOKED') {
-      forceLogout('SESSION_REVOKED');
+      forceLogout('SESSION_REVOKED', response.data.message);
       return Promise.reject(error);
     }
 
@@ -91,7 +100,7 @@ api.interceptors.response.use(
       return api(config);
     } catch (refreshError) {
       resolveQueue(refreshError, null);
-      forceLogout(refreshError.response?.data?.code);
+      forceLogout(refreshError.response?.data?.code, refreshError.response?.data?.message);
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

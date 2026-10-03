@@ -3,7 +3,9 @@ const ApiError = require('../utils/ApiError');
 const tokenService = require('../services/tokenService');
 const tenantContext = require('../utils/tenantContext');
 const populateUserRefs = require('../utils/populateUserRefs');
+const subscriptionService = require('../services/subscriptionService');
 const User = require('../models/User');
+const Organization = require('../models/Organization');
 
 async function loadUserFromToken(req) {
   const header = req.headers.authorization;
@@ -40,6 +42,27 @@ async function loadUserFromToken(req) {
   }
 
   if (user.status !== 'active') throw ApiError.forbidden('تم تعطيل هذا الحساب');
+
+  // Subscription expiration was previously only checked at login (see
+  // controllers/auth.controller.js) — an already-issued, still-unexpired
+  // access token kept working for an organization whose subscription had
+  // since expired, exactly the same gap SESSION_REVOKED closed for forced
+  // logout. Checked on every request, not just login, for the same reason.
+  //
+  // Exempt for isPlatformAdmin: their own tenant-side account happens to
+  // belong to some organization too, and if *that one's* subscription lapses
+  // this would otherwise lock them out of the cross-org Platform Admin panel
+  // they'd use to fix any organization's subscription — a deadlock, not a
+  // meaningful restriction (the same self-lockout concern that already
+  // excludes a Platform Admin from their own org-wide forced-logout, see
+  // controllers/platform/organizationDetail.controller.js). Billing
+  // enforcement is a tenant-facing concern; platform-level accounts sit
+  // above it entirely, same as permit()'s super-admin bypass.
+  if (!user.isPlatformAdmin) {
+    const organization = await Organization.findById(user.organizationId).select('plan subscriptionStatus subscriptionEndsAt');
+    const block = organization && subscriptionService.getBlockInfo(organization);
+    if (block) throw ApiError.forbidden(block.message, block.code);
+  }
 
   await populateUserRefs(user);
   return user;

@@ -11,6 +11,7 @@ const Product = require('../../models/Product');
 const Invitation = require('../../models/Invitation');
 const AuditLog = require('../../models/AuditLog');
 const Settings = require('../../models/Settings');
+const subscriptionService = require('../../services/subscriptionService');
 
 // `ownerId` is the *current* owner and can be transferred (see updateOwner
 // below); `createdBy` is the immutable historical fact of who registered the
@@ -36,6 +37,10 @@ async function withOrgSummary(org) {
     status: org.status,
     plan: org.plan,
     subscriptionStatus: org.subscriptionStatus,
+    // What's actually enforced right now (services/subscriptionService.js),
+    // which the raw subscriptionStatus above can disagree with — see that
+    // service's module comment for why.
+    effectiveSubscriptionStatus: subscriptionService.getEffectiveSubscriptionStatus(org),
     createdAt: org.createdAt,
     owner,
     usersCount,
@@ -88,6 +93,7 @@ const getById = asyncHandler(async (req, res) => {
 
     return {
       organization: org,
+      effectiveSubscriptionStatus: subscriptionService.getEffectiveSubscriptionStatus(org),
       company: settings?.company || null,
       owner,
       invitationsCount,

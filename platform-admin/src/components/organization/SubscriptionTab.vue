@@ -22,6 +22,15 @@ const subForm = reactive({
   subscriptionEndsAt: '',
 });
 const savingSub = ref(false);
+// What's actually enforced right now (backend services/subscriptionService.js),
+// which subForm.subscriptionStatus above can disagree with — that field is
+// just whatever was last typed into it; nothing keeps it in sync with dates
+// actually passing. Shown read-only so this doesn't look like a second,
+// editable status.
+const effectiveStatus = ref(null);
+const EFFECTIVE_LABELS = {
+  ACTIVE: 'نشط', PAST_DUE: 'متأخر الدفع', EXPIRED: 'منتهي', TRIAL_EXPIRED: 'انتهت التجربة', SUSPENDED: 'معلّق',
+};
 
 const usage = ref({ users: 0, warehouses: 0, products: 0 });
 const limitsForm = reactive({ maxUsers: '', maxWarehouses: '', maxProducts: '', maxStorageMB: '' });
@@ -52,6 +61,7 @@ async function load() {
       subscriptionStartsAt: toDateInput(sub.data.subscriptionStartsAt),
       subscriptionEndsAt: toDateInput(sub.data.subscriptionEndsAt),
     });
+    effectiveStatus.value = sub.data.effectiveStatus;
     usage.value = lim.data.usage;
     limitsForm.maxUsers = lim.data.limits.maxUsers ?? '';
     limitsForm.maxWarehouses = lim.data.limits.maxWarehouses ?? '';
@@ -67,13 +77,14 @@ async function load() {
 async function saveSubscription() {
   savingSub.value = true;
   try {
-    await platformService.updateSubscription(props.organizationId, {
+    const { data } = await platformService.updateSubscription(props.organizationId, {
       plan: subForm.plan,
       subscriptionStatus: subForm.subscriptionStatus,
       trialEndsAt: subForm.trialEndsAt || null,
       subscriptionStartsAt: subForm.subscriptionStartsAt || null,
       subscriptionEndsAt: subForm.subscriptionEndsAt || null,
     });
+    effectiveStatus.value = data.data.effectiveStatus;
     toast.success('تم تحديث بيانات الاشتراك');
   } catch (err) {
     toast.error(err.response?.data?.message || 'حدث خطأ ما');
@@ -110,6 +121,15 @@ onMounted(load);
       <div class="card p-4">
         <h3 class="font-bold text-slate-700 dark:text-slate-200 mb-3">الاشتراك</h3>
         <div class="space-y-3">
+          <div v-if="effectiveStatus" class="flex items-center gap-2 text-xs">
+            <span class="text-slate-400">الحالة الفعلية المطبّقة الآن:</span>
+            <span
+              class="px-2 py-0.5 rounded-full font-medium"
+              :class="['EXPIRED', 'TRIAL_EXPIRED', 'SUSPENDED'].includes(effectiveStatus)
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'"
+            >{{ EFFECTIVE_LABELS[effectiveStatus] || effectiveStatus }}</span>
+          </div>
           <div>
             <label class="label">الخطة</label>
             <select v-model="subForm.plan" class="input">
@@ -129,13 +149,16 @@ onMounted(load);
             </div>
             <div>
               <label class="label">نهاية الاشتراك</label>
-              <input v-model="subForm.subscriptionEndsAt" type="date" class="input" />
+              <input v-model="subForm.subscriptionEndsAt" type="date" class="input" :disabled="subForm.plan === 'FREE'" />
             </div>
             <div>
               <label class="label">نهاية التجربة</label>
               <input v-model="subForm.trialEndsAt" type="date" class="input" />
             </div>
           </div>
+          <p v-if="subForm.plan === 'FREE'" class="text-xs text-amber-600 dark:text-amber-400">
+            الخطة المجانية دائمة ولا تنتهي — يتم تجاهل تاريخ نهاية الاشتراك بغض النظر عن قيمته.
+          </p>
           <button class="btn-primary" :disabled="savingSub" @click="saveSubscription">
             {{ savingSub ? 'جارٍ الحفظ...' : 'حفظ بيانات الاشتراك' }}
           </button>
